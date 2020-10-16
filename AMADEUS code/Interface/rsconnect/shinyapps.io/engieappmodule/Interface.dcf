@@ -1,0 +1,13 @@
+name: Interface
+title: Interface
+username:
+account: engieappmodule
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 597758
+bundleId: 1730880
+url: https://engieappmodule.shinyapps.io/Interface/
+when: 1543571811.36652
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|run.R|run.Rout|world_countries.geojson

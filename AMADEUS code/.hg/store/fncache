@@ -1,0 +1,18 @@
+data/Interface/app.R.i
+data/Functions/Demand Projection/NEU_Projection.R.i
+data/Functions/Demand Projection/IND_Projection.R.i
+data/Functions/Input/Residential_Inputs_Functions.R.i
+data/Functions/Demand Projection/RES_Projection.R.i
+data/Functions/Demand Projection/AGR_Projection.R.i
+data/Functions/Demand Projection/ESU_Projection.R.i
+data/.hgignore.i
+data/Functions/Output/General_Output.R.i
+data/Functions/Input/Agriculture_Inputs_Functions.R.i
+data/Functions/Input/Industrial_Inputs_Functions.R.i
+data/Functions/Input/General_Inputs_Functions.R.i
+data/Launch AMADEUS.bat.i
+data/Functions/Input/Inputs_model.R.i
+data/Interface/run.R.i
+data/Functions/Demand Projection/TER_Projection.R.i
+data/Functions/Input/Services_Inputs_Functions.R.i
+data/Functions/Demand Projection/TRA_Projection.R.i

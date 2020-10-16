@@ -1,0 +1,124 @@
+
+R version 3.4.4 (2018-03-15) -- "Someone to Lean On"
+Copyright (C) 2018 The R Foundation for Statistical Computing
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+
+R est un logiciel libre livré sans AUCUNE GARANTIE.
+Vous pouvez le redistribuer sous certaines conditions.
+Tapez 'license()' ou 'licence()' pour plus de détails.
+
+R est un projet collaboratif avec de nombreux contributeurs.
+Tapez 'contributors()' pour plus d'information et
+'citation()' pour la façon de le citer dans les publications.
+
+Tapez 'demo()' pour des démonstrations, 'help()' pour l'aide
+en ligne ou 'help.start()' pour obtenir l'aide au format HTML.
+Tapez 'q()' pour quitter R.
+
+> require(shiny)
+Le chargement a nécessité le package : shiny
+> folder_address = 'C:\\Users\\NF5412\\Desktop\\AMADEUS\\AMADEUS code\\Interface'
+> runApp(folder_address, launch.browser=TRUE)
+Loading required package: xlsxjars
+
+Attaching package: 'zoo'
+
+The following objects are masked from 'package:base':
+
+    as.Date, as.Date.numeric
+
+Loading required package: lattice
+Loading required package: survival
+Loading required package: Formula
+Loading required package: ggplot2
+
+Attaching package: 'Hmisc'
+
+The following objects are masked from 'package:base':
+
+    format.pval, units
+
+
+Attaching package: 'plotly'
+
+The following object is masked from 'package:Hmisc':
+
+    subplot
+
+The following object is masked from 'package:ggplot2':
+
+    last_plot
+
+The following object is masked from 'package:stats':
+
+    filter
+
+The following object is masked from 'package:graphics':
+
+    layout
+
+Loading required package: reshape
+
+Attaching package: 'reshape'
+
+The following object is masked from 'package:plotly':
+
+    rename
+
+
+Listening on http://127.0.0.1:6872
+Warning: Error in Choice_Input_File: objet 'Hist_Energy_Demand' introuvable
+  93: Choice_Input_File
+  92: renderUI [C:\Users\NF5412\Desktop\AMADEUS\AMADEUS code\Interface/app.R#355]
+  91: func
+  78: origRenderFunc
+  77: output$Item
+   1: runApp
+Warning: Error in Choice_Input_File: objet 'Hist_Energy_Demand' introuvable
+  93: Choice_Input_File
+  92: renderUI [C:\Users\NF5412\Desktop\AMADEUS\AMADEUS code\Interface/app.R#372]
+  91: func
+  78: origRenderFunc
+  77: output$Energy
+   1: runApp
+Warning: Error in Choice_Input_File: objet 'Hist_Energy_Demand' introuvable
+  93: Choice_Input_File
+  92: renderUI [C:\Users\NF5412\Desktop\AMADEUS\AMADEUS code\Interface/app.R#389]
+  91: func
+  78: origRenderFunc
+  77: output$Sector
+   1: runApp
+Warning: Error in Choice_Input_File: objet 'Hist_Energy_Demand' introuvable
+  93: Choice_Input_File
+  92: renderUI [C:\Users\NF5412\Desktop\AMADEUS\AMADEUS code\Interface/app.R#406]
+  91: func
+  78: origRenderFunc
+  77: output$Sub_Sector
+   1: runApp
+Warning: Error in Choice_Input_File: objet 'Hist_Energy_Demand' introuvable
+  93: Choice_Input_File
+  92: renderUI [C:\Users\NF5412\Desktop\AMADEUS\AMADEUS code\Interface/app.R#425]
+  91: func
+  78: origRenderFunc
+  77: output$Usage
+   1: runApp
+Warning: Error in Choice_Input_File: objet 'Hist_Energy_Demand' introuvable
+  93: Choice_Input_File
+  92: renderUI [C:\Users\NF5412\Desktop\AMADEUS\AMADEUS code\Interface/app.R#442]
+  91: func
+  78: origRenderFunc
+  77: output$Country
+   1: runApp
+Warning: Error in Choice_Input_File: objet 'Hist_Energy_Demand' introuvable
+  93: Choice_Input_File
+  92: renderTable [C:\Users\NF5412\Desktop\AMADEUS\AMADEUS code\Interface/app.R#472]
+  91: func
+  78: origRenderFunc
+  77: output$dataset
+   1: runApp
+Warning: Error in Extract_Sector: objet 'Hist_Energy_Demand' introuvable
+  77: subset
+  75: Extract_Sector
+  74: main_input_Hist_AGR
+  72: observeEventHandler [C:\Users\NF5412\Desktop\AMADEUS\AMADEUS code\Interface/app.R#327]
+   1: runApp
