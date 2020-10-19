@@ -724,19 +724,20 @@ options( dplyr.summarise.inform = FALSE )
         
           # appliquer alpha (part des equipements dans l'ancien qui reste )
           
-          # browser()  
+          browser()  
           
           flux_obsol_alpha <- bs_obsol %>%
-            mutate( no_equipment = self$ALPHA * no_equipment ) %>%
-            select(-lifetime ) %>%
+            left_join( self$EQUIPMENT_ALPHA, by = "Equipment") %>%
+            mutate( no_equipment = alpha * no_equipment ) %>%
+            select( -c( lifetime, alpha ) %>%
             mutate( installation_year = year )
           
           flux_obsol_minus_alpha <- market_share_construction_tmp %>%
-            mutate( no_equipment = market_share * flux_obsol_total * (1-self$ALPHA) ) %>%
+            left_join( self$EQUIPMENT_ALPHA, by = "Equipment") %>%
+            mutate( no_equipment = market_share * flux_obsol_total * (1-alpha) ) %>%
             mutate( building_class = "old",
                     installation_year = year, 
                     construction_year = self$projection_year -1 ) %>% # Ancien donc meme annee de construction tout le long
-            select(-market_share) %>%
             select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
           
           flux_obsol <- flux_obsol_alpha %>%
@@ -839,7 +840,8 @@ options( dplyr.summarise.inform = FALSE )
           if( nrow(bs_obsol) > 0 ) #On applique alpha uniqement quand bs_obsol n'est pas vide
           {
             flux_obsol_alpha <- bs_obsol %>%
-              mutate( no_equipment = self$ALPHA * no_equipment ) %>%
+              left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
+              mutate( no_equipment = alpha * no_equipment ) %>%
               mutate( installation_year = year ) %>%
               select( -lifetime )
             
@@ -848,7 +850,8 @@ options( dplyr.summarise.inform = FALSE )
             flux_obsol_minus_alpha <- market_share_construction_tmp %>%
               merge( flux_obsol_total %>% select( construction_year ) ) %>%
               left_join( flux_obsol_total, by = "construction_year" ) %>%
-              mutate( no_equipment = market_share * no_equipment_total * (1-self$ALPHA) ) %>%
+              left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
+              mutate( no_equipment = market_share * no_equipment_total * (1-alpha) ) %>%
               mutate( building_class = "construction",
                       installation_year = year ) %>%
               select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
@@ -909,7 +912,8 @@ options( dplyr.summarise.inform = FALSE )
             # browser()
             
             flux_obsol_alpha <- bs_obsol %>%
-              mutate( no_equipment = self$ALPHA * no_equipment ) %>%
+              left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
+              mutate( no_equipment = alpha * no_equipment ) %>%
               mutate( installation_year = year ) %>%
               select(-lifetime )
             
@@ -918,7 +922,8 @@ options( dplyr.summarise.inform = FALSE )
             flux_obsol_minus_alpha <- market_share_construction_tmp %>%
               merge( flux_obsol_total %>% select( construction_year ) ) %>%
               left_join( flux_obsol_total, by = "construction_year" ) %>%
-              mutate( no_equipment = market_share * no_equipment_total * (1-self$ALPHA) ) %>%
+              left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
+              mutate( no_equipment = market_share * no_equipment_total * (1-alpha) ) %>%
               mutate( building_class = "renovation",
                       installation_year = year ) %>%
               select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
@@ -1462,7 +1467,9 @@ options( dplyr.summarise.inform = FALSE )
     CEP_MAPPING = tibble( Energy = c( "coal", "oil", "gas", "biomass and waste", "final heat", "electricity"),
                           CEP = c( 1, 1, 1, 1, 1, 2.5 ) ),
     
-    ALPHA = 0.5, # part des equipements en fin de vie dans l'ancien gardant le meme equipement
+    # part des equipements en fin de vie gardant le meme equipement
+    EQUIPMENT_ALPHA = tibble( Equipment = c("coal boiler", "oil boiler", "gas boiler", "biomass boiler", "district heating", "hp air/air", "hp air/water", "hp hybrid", "direct heater"),
+                              alpha = c( 0, 0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 ) ),
     
     country = NULL,
     country_zone = NULL, 
