@@ -1,10 +1,5 @@
 #Fichier .gitignore permettant d'ignorer des fichiers lors des pull requests
 
 #Permet d'ignorer certains dossiers de data
-Data/GB2018/
 Data/Outputs/
-Data/Powerpoint\  output/
 Data/Saved Scenario\  Inputs/
-
-#Permet d'ignorer tous les fichiers xlsx de data
-Data/*.xlsx
