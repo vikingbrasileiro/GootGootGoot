@@ -1519,8 +1519,8 @@ options( dplyr.summarise.inform = FALSE )
   
   ####################################################
   
-  data = readr::read_delim( "./Building Stock Model/Data/test_data_7.csv" , delim = ";")
-  country_mapping = readr::read_delim( "./Building Stock Model/Data/CountryRegionMapping.csv" , delim = ",")
+  data = readr::read_delim( "./Building Stock Model/Data/Inputs/test_data_7.csv" , delim = ";")
+  country_mapping = readr::read_delim( "./Building Stock Model/Data/Inputs/CountryRegionMapping.csv" , delim = ",")
   # country_list = c("AT","BE","BG","CY","CZ","DE","DK","EE","EL","ES","FI","FR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","UK","CH","NO")
   # country_list = c("AT","BE","CH","DE","ES","FR","IT","NL","PT") #???,"BE","BG","CY","CZ","DE","DK","EE","EL","ES","FI","FR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","UK","CH","NO")
   country_list = c( "CH" )

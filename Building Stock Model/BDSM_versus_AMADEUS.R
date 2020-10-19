@@ -9,6 +9,7 @@
 
 ## data processing from Amadeus to a format comparable to BDSM
 library( gridExtra )
+library( tidyverse )
 
 
 bindingBdsmOutput <- function( listBdsm )
@@ -238,14 +239,14 @@ amadeusHeatingDemandData = formattingAmadeusHeatingDemandOutput( amadeusHeatingD
 exportFinalEnergyComparisonPlotToPdf( filenamePdf = "./Building Stock Model/Data/Outputs/FinalEnergyDemand_16102020.pdf", amadeusFinalEnergyData, bdsmFinalEnergyData )
 exportHeatingDemandComparisonPlotToPdf( filenamePdf = "./Building Stock Model/Data/Outputs/HeatingDemandTest.pdf", amadeusHeatingDemandData, bdsmHeatingDemandData )
 
-bdsmFinalEnergyData %>% 
-  filter( Scenario == "BT", Energy != "total", Country != "FR" ) %>% 
-  group_by( Energy, Year) %>% 
-  summarise( Values = sum(Values)) %>%
-  ggplot( aes( as.numeric(Year), Values, fill = Energy ) ) + geom_area()
+# bdsmFinalEnergyData %>% 
+#   filter( Scenario == "BT", Energy != "total", Country != "FR" ) %>% 
+#   group_by( Energy, Year) %>% 
+#   summarise( Values = sum(Values)) %>%
+#   ggplot( aes( as.numeric(Year), Values, fill = Energy ) ) + geom_area()
 
-amadeusFinalEnergyData %>% 
-  filter( Scenario == "BT", !( Energy %in% c("total", "direct hydrogen") ), Country != "FR" ) %>% 
-  group_by( Energy, Year) %>% 
-  summarise( Values = sum(Values)) %>%
-  ggplot( aes( as.numeric(Year), Values, fill = Energy ) ) + geom_area()
+# amadeusFinalEnergyData %>% 
+#   filter( Scenario == "BT", !( Energy %in% c("total", "direct hydrogen") ), Country != "FR" ) %>% 
+#   group_by( Energy, Year) %>% 
+#   summarise( Values = sum(Values)) %>%
+#   ggplot( aes( as.numeric(Year), Values, fill = Energy ) ) + geom_area()
