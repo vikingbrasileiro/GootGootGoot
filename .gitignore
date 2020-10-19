@@ -1,5 +1,5 @@
 #Fichier .gitignore permettant d'ignorer des fichiers lors des pull requests
 
 #Permet d'ignorer certains dossiers de data
-Data/Outputs/
+Building Stock Model/Data/Outputs/
 Data/Saved Scenario\  Inputs/
