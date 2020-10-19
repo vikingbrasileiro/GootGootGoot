@@ -724,17 +724,17 @@ options( dplyr.summarise.inform = FALSE )
         
           # appliquer alpha (part des equipements dans l'ancien qui reste )
           
-          browser()  
+          # browser()  
           
           flux_obsol_alpha <- bs_obsol %>%
             left_join( self$EQUIPMENT_ALPHA, by = "Equipment") %>%
             mutate( no_equipment = alpha * no_equipment ) %>%
-            select( -c( lifetime, alpha ) %>%
+            select( -c( lifetime, alpha ) ) %>%
             mutate( installation_year = year )
           
+          noEquipmentNotSubstitute = sum( flux_obsol_alpha$no_equipment ) # Number of equipment that will not changed of heating technologies when reaching its lifetime
           flux_obsol_minus_alpha <- market_share_construction_tmp %>%
-            left_join( self$EQUIPMENT_ALPHA, by = "Equipment") %>%
-            mutate( no_equipment = market_share * flux_obsol_total * (1-alpha) ) %>%
+            mutate( no_equipment = market_share * ( flux_obsol_total - noEquipmentNotSubstitute ) ) %>%
             mutate( building_class = "old",
                     installation_year = year, 
                     construction_year = self$projection_year -1 ) %>% # Ancien donc meme annee de construction tout le long
@@ -843,15 +843,23 @@ options( dplyr.summarise.inform = FALSE )
               left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
               mutate( no_equipment = alpha * no_equipment ) %>%
               mutate( installation_year = year ) %>%
-              select( -lifetime )
+              select( -c( lifetime, alpha ) )
             
             # print( paste( "bs_renovation after positive alpha flux:", sum( flux_obsol_alpha$no_equipment ) ) )
 
+            # Calculatino of equipment that will be subsitute with other equipment that the one reaching its end of life
+            flux_obsol_total = flux_obsol_alpha %>%
+              group_by( construction_year ) %>%
+              summarise( no_equipment = sum ( no_equipment ) ) %>%
+              left_join( flux_obsol_total, by = "construction_year" ) %>%
+              mutate( no_equipment_total = no_equipment_total - no_equipment ) %>%
+              select( -no_equipment )
+
+             # Number of equipment that will not changed of heating technologies when reaching its lifetime
             flux_obsol_minus_alpha <- market_share_construction_tmp %>%
               merge( flux_obsol_total %>% select( construction_year ) ) %>%
               left_join( flux_obsol_total, by = "construction_year" ) %>%
-              left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
-              mutate( no_equipment = market_share * no_equipment_total * (1-alpha) ) %>%
+              mutate( no_equipment = market_share * no_equipment_total ) %>%
               mutate( building_class = "construction",
                       installation_year = year ) %>%
               select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
@@ -915,15 +923,21 @@ options( dplyr.summarise.inform = FALSE )
               left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
               mutate( no_equipment = alpha * no_equipment ) %>%
               mutate( installation_year = year ) %>%
-              select(-lifetime )
+              select(- c( lifetime, alpha ) )
             
             # print( paste( "bs_renovation after positive alpha flux:", sum( flux_obsol_alpha$no_equipment ) ) )
+
+            flux_obsol_total = flux_obsol_alpha %>%
+              group_by( construction_year ) %>%
+              summarise( no_equipment = sum ( no_equipment ) ) %>%
+              left_join( flux_obsol_total, by = "construction_year" ) %>%
+              mutate( no_equipment_total = no_equipment_total - no_equipment ) %>%
+              select( -no_equipment )
 
             flux_obsol_minus_alpha <- market_share_construction_tmp %>%
               merge( flux_obsol_total %>% select( construction_year ) ) %>%
               left_join( flux_obsol_total, by = "construction_year" ) %>%
-              left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
-              mutate( no_equipment = market_share * no_equipment_total * (1-alpha) ) %>%
+              mutate( no_equipment = market_share * no_equipment_total ) %>%
               mutate( building_class = "renovation",
                       installation_year = year ) %>%
               select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
@@ -1530,7 +1544,7 @@ options( dplyr.summarise.inform = FALSE )
   country_mapping = readr::read_delim( "./Building Stock Model/Data/Inputs/CountryRegionMapping.csv" , delim = ",")
   # country_list = c("AT","BE","BG","CY","CZ","DE","DK","EE","EL","ES","FI","FR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","UK","CH","NO")
   # country_list = c("AT","BE","CH","DE","ES","FR","IT","NL","PT") #???,"BE","BG","CY","CZ","DE","DK","EE","EL","ES","FI","FR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","UK","CH","NO")
-  country_list = c( "CH" )
+  country_list = c( "IT" )
   ls_BDSM = list()
 
   for( country_name in country_list )
@@ -1540,35 +1554,3 @@ options( dplyr.summarise.inform = FALSE )
   }
 
 saveRDS( ls_BDSM, "./Building Stock Model/Data/Outputs/CWE_projection.RDS")
-
-###### Function to get total themral demand per country 
-  # thermal_summary = NULL
-  # thermal_tmp = NULL
-  # ggplot_ls = list()
-
-  # for( country_name in country_list )
-  # { 
-  #   # browser()
-  #   thermal_tmp = ls_BDSM[[ country_name ]]$ls_outputs_data$export_AMADEUS %>% 
-  #       filter( ID_Item == "Heating Demand")
-
-  #   thermal_tmp = thermal_tmp %>%
-  #       gather( Year, thermal_consumption, 11:length(thermal_tmp) ) %>%
-  #       group_by( Country, Scenario, Year ) %>% summarise( thermal_consumption = sum( thermal_consumption ) )
-  #   # browser()
-  #   ggplot_ls[[country_name]] = ggplot( thermal_tmp, aes( Year, thermal_consumption, colour = Scenario)) + 
-  #       geom_point() + 
-  #       scale_y_continuous( limits = c( 0 , max( thermal_tmp$thermal_consumption) + 5)) +
-  #       scale_x_discrete( breaks = seq( 2020, 2050 , 5) ) + ggtitle( country_name ) +
-  #       theme(plot.title = element_text(hjust = 0.5)) 
-        
-  #   thermal_summary = rbind( thermal_summary, thermal_tmp )
-  #   print( ggplot_ls[[country_name]] )
-  # }
-  # thermal_summary = thermal_summary %>%
-  #   spread( Year, thermal_consumption )
-
-#   pdf("plotsTest6.pdf", onefile = TRUE)
-#   invisible(print(ggplot_ls))
-#   dev.off()
-#   write_csv( thermal_summary, "thermal_summary_CWE.csv")
