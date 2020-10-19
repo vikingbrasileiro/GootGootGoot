@@ -1,2 +1,2 @@
-# GootGootGoot
-Bottom-up model to forecast demand at end-use level in Europe
+# Building Stock module
+Building stock model forecasting building stock evolution based on scenario-based parameters
