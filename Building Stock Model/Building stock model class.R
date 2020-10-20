@@ -1003,32 +1003,28 @@ options( dplyr.summarise.inform = FALSE )
 
     insulation_thermal_per_bc =  thermal_consumption_per_bc %>%
       left_join( total_floor_area_per_bc, by = c("Scenario", "building_class", "Year") ) %>%
-      mutate( average_insulation = thermal_consumption / total_floor_area * 10^9 ) 
+      mutate( thermal_energy_per_sqm = thermal_consumption / total_floor_area * 10^9 ) %>%
+      select( -c( total_floor_area, thermal_consumption ))
+
+    browser()
+    insulation_primary_per_bc_tmp = consumption_backup_df %>% 
+      group_by( Scenario, Sector, Energy, building_class, Year ) %>%
+      summarise( final_consumption = sum( consumption_final_backup ) )
 
     #Primary consumption per sqm per building class
-    main = self$ls_outputs_data$consumption_main_stock %>% ungroup() %>%
-      select(Scenario,Sector,building_class,Energy,Year,consumption_final_main) %>%
-      rename(Values = consumption_final_main)
-    
-    backup = self$ls_outputs_data$consumption_backup_stock %>% ungroup() %>%
-      select(Scenario,Sector,building_class,Energy,Year,consumption_final_backup) %>%
-      rename(Values = consumption_final_backup)
-    
-    EF_bc <- rbind(main,backup) %>%
-      drop_na(Energy)%>%
-      group_by(Scenario,Sector,building_class,Energy,Year) %>%
-      summarise(EF_TWh = sum(Values,na.rm = T)) %>%
-      left_join(self$CEP_MAPPING, by = "Energy") %>%
-      mutate(EP_TWh = EF_TWh * CEP)
-    
-    
-    EP_bc <- EF_bc %>%
-      group_by(Scenario,Sector,building_class,Year) %>%
-      summarise(Primary_Energy_TWh = sum(EP_TWh)) %>%
-      left_join(total_floor_area_per_bc, by = c("building_class","Scenario","Year")) %>%
-      mutate(EP_per_sqm = Primary_Energy_TWh / total_floor_area * 10^9) %>%
-      mutate(Country = self$country)
-    
+    insulation_primary_per_bc = consumption_main_df %>% 
+      group_by( Scenario, Sector, Energy, building_class, Year ) %>%
+      summarise( final_consumption = sum( consumption_final_main ) ) %>% ungroup() %>%
+      rbind( insulation_primary_per_bc_tmp ) %>% 
+      group_by( Scenario, Sector, Energy, building_class, Year ) %>%
+      summarise( final_consumption = sum( final_consumption ) ) %>% 
+      left_join( self$CEP_MAPPING, by = "Energy" ) %>%
+      mutate( primary_energy = final_consumption * CEP ) %>% 
+      group_by( Scenario, Sector, building_class, Year ) %>%
+      summarise( primary_energy = sum( primary_energy, na.rm = TRUE ) ) %>%
+      left_join( total_floor_area_per_bc, by = c( "building_class", "Scenario", "Year" ) ) %>%
+      mutate( primary_energy_per_sqm = primary_energy / total_floor_area * 10^9 ) %>%
+      select( -c( total_floor_area, primary_energy ) )
     
     ls_KPI = list( 
       "stock_per_bc" = stock_per_bc,
@@ -1040,7 +1036,7 @@ options( dplyr.summarise.inform = FALSE )
       "thermal_consumption_per_equipment" = thermal_consumption_per_equipment,
       "total_floor_area_per_bc" = total_floor_area_per_bc,
       "insulation_thermal_per_bc" = insulation_thermal_per_bc,
-      "insulation_primary_per_bc" = EP_bc
+      "insulation_primary_per_bc" = insulation_primary_per_bc
     )
 
       
