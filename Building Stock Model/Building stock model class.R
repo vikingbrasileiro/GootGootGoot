@@ -103,7 +103,7 @@ options( dplyr.summarise.inform = FALSE )
     
     self$ls_inputs_data$insulation_policy = self$data_raw %>% 
       filter( stringr::str_detect(ID_Item, "primary energy")) %>% # filter "if contains primary energy"
-      select( Building_Class = ID_Item, Sector, Usage, Unit, Year, Value) %>%
+      select( Building_Class = ID_Item, Scenario, Sector, Equipment, Usage, Unit, Year, Value) %>%
       mutate( Building_Class = case_when( stringr::str_detect(Building_Class, "new") ~ "construction" ,
                                           stringr::str_detect(Building_Class, "renovated")  ~ "renovation") ) # case_when is similar to
     
@@ -195,7 +195,7 @@ options( dplyr.summarise.inform = FALSE )
     return(all_equipment)
   }
   
-  p_new_equipment_lifetime_distribution <- function( equipment_df , sigma = 5 )
+  p_new_equipment_lifetime_distribution <- function( equipment_df, sigma = 5 )
   {
     lifetime_df = self$EQUIPMENT_MAPPING %>% select( -Energy ) 
     equipments = unique(lifetime_df$Equipment)  
@@ -680,17 +680,14 @@ options( dplyr.summarise.inform = FALSE )
   p_project_efficiency_main_RES <- function()
   {
     #####################  Data preparation ##########################
-    
-    # browser()
-    
-    # 1. Insualtion of construction and renovaton
+    # 1. Insulation of construction and renovaton
     insulation_new = self$ls_inputs_data$insulation_policy %>%
       filter( Sector == "RES", 
               Year > 2019 ) %>%
       rename( building_class = Building_Class, 
               construction_year = Year, 
               insulation_new  = Value )  %>%
-      select( Sector, building_class, construction_year, insulation_new )
+      select( Scenario, Sector, building_class, Equipment, construction_year, insulation_new )
     
     
     insulation_old = self$ls_inputs_data$insulation_old %>%
@@ -786,7 +783,7 @@ options( dplyr.summarise.inform = FALSE )
       rename( building_class = Building_Class, 
               construction_year = Year, 
               insulation_new  = Value )  %>%
-      select( Sector, building_class, construction_year, insulation_new )
+      select( Scenario, Sector, building_class, Equipment, construction_year, insulation_new )
     
     
     insulation_old = self$ls_inputs_data$insulation_old %>%
@@ -862,7 +859,6 @@ options( dplyr.summarise.inform = FALSE )
       select( -c( Backup_share, Energy ) ) %>%
       left_join( self$EQUIPMENT_MAPPING, by = "Equipment" ) %>%
       select( -Lifetime )
-    
     
     equipment_stock = equipment_stock %>%
       left_join( efficiency_df , by =  c( "Sector", "Equipment", "installation_year" ) ) %>%
