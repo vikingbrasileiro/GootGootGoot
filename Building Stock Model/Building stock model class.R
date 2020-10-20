@@ -762,7 +762,7 @@ options( dplyr.summarise.inform = FALSE )
     equipment_stock = self$ls_outputs_data$equipment_stock
     equipment_stock = equipment_stock %>%
       left_join( efficiency_df , by =  c( "Sector", "Equipment", "installation_year" ) ) %>%
-      left_join( insulation_new , by = c( "Sector", "building_class", "construction_year" ) ) %>%
+      left_join( insulation_new , by = c( "Scenario", "Sector", "Equipment", "building_class", "construction_year" ) ) %>%
       left_join( insulation_old , by = c( "Sector", "Equipment", "building_class", "construction_year") ) %>%
       left_join( floor_area, by = "construction_year") %>%
       left_join( self$CEP_MAPPING, by = "Energy" )
@@ -866,7 +866,7 @@ options( dplyr.summarise.inform = FALSE )
     
     equipment_stock = equipment_stock %>%
       left_join( efficiency_df , by =  c( "Sector", "Equipment", "installation_year" ) ) %>%
-      left_join( insulation_new , by = c( "Sector", "building_class", "construction_year" ) ) %>%
+      left_join( insulation_new , by = c( "Scenario", "Sector", "Equipment", "building_class", "construction_year" ) ) %>%
       left_join( insulation_old , by = c( "Sector", "Equipment", "building_class", "construction_year") ) %>%
       left_join( floor_area, by = "construction_year") %>%
       rename( Backup = Equipment,
@@ -1000,22 +1000,40 @@ options( dplyr.summarise.inform = FALSE )
       rbind( thermal_consumption_per_equipment_tmp ) %>%
       arrange( Scenario, Sector, Year, Equipment )
     
-    ## Needed to calculate insulation
-    # floor_area = self$ls_inputs_data$useful_floor_area %>%
-    #   filter( Sector == "RES" ) %>%
-    #   select( Year, floor_area ) %>%
-    #   rename( contruction_year  = Year )
-    # browser()
-    # average thermal insulation per building class
     total_floor_area_per_bc = efficiency_main_df %>%
       mutate( total_floor_area = floor_area * no_equipment ) %>%
       group_by( Scenario, building_class, Year ) %>%
       summarise( total_floor_area = sum( total_floor_area) ) %>% ungroup()
 
-    insulation_per_bc =  thermal_consumption_per_bc %>%
+    insulation_thermal_per_bc =  thermal_consumption_per_bc %>%
       left_join( total_floor_area_per_bc, by = c("Scenario", "building_class", "Year") ) %>%
       mutate( average_insulation = thermal_consumption / total_floor_area * 10^9 ) 
 
+    #Primary consumption per sqm per building class
+    main = self$ls_outputs_data$consumption_main_stock %>% ungroup() %>%
+      select(Scenario,Sector,building_class,Energy,Year,consumption_final_main) %>%
+      rename(Values = consumption_final_main)
+    
+    backup = self$ls_outputs_data$consumption_backup_stock %>% ungroup() %>%
+      select(Scenario,Sector,building_class,Energy,Year,consumption_final_backup) %>%
+      rename(Values = consumption_final_backup)
+    
+    EF_bc <- rbind(main,backup) %>%
+      drop_na(Energy)%>%
+      group_by(Scenario,Sector,building_class,Energy,Year) %>%
+      summarise(EF_TWh = sum(Values,na.rm = T)) %>%
+      left_join(self$CEP_MAPPING, by = "Energy") %>%
+      mutate(EP_TWh = EF_TWh * CEP)
+    
+    
+    EP_bc <- EF_bc %>%
+      group_by(Scenario,Sector,building_class,Year) %>%
+      summarise(Primary_Energy_TWh = sum(EP_TWh)) %>%
+      left_join(total_floor_area_per_bc, by = c("building_class","Scenario","Year")) %>%
+      mutate(EP_per_sqm = Primary_Energy_TWh / total_floor_area * 10^9) %>%
+      mutate(Country = self$country)
+    
+    
     ls_KPI = list( 
       "stock_per_bc" = stock_per_bc,
       "stock_per_equipment" = stock_per_equipment,
@@ -1025,7 +1043,8 @@ options( dplyr.summarise.inform = FALSE )
       "thermal_consumption_per_energy" = thermal_consumption_per_energy,
       "thermal_consumption_per_equipment" = thermal_consumption_per_equipment,
       "total_floor_area_per_bc" = total_floor_area_per_bc,
-      "insulation_per_bc" = insulation_per_bc
+      "insulation_thermal_per_bc" = insulation_thermal_per_bc,
+      "insulation_primary_per_bc" = EP_bc
     )
 
       
@@ -1203,7 +1222,14 @@ options( dplyr.summarise.inform = FALSE )
   
   ####################################################
   
+  insulation_policy = readr::read_delim( "./Building Stock Model/Data/Inputs/PolicyData.csv" , delim = ",")
   data = readr::read_delim( "./Building Stock Model/Data/Inputs/test_data_7.csv" , delim = ";")
+
+  # Tmp Replacing insulation policy to be able to match previous demand
+  data = data %>% 
+    filter( !(ID_Item %in% c( "Primary energy renovated", "Primary energy new" ) ) ) %>%
+    rbind( insulation_policy )
+
   country_mapping = readr::read_delim( "./Building Stock Model/Data/Inputs/CountryRegionMapping.csv" , delim = ",")
   # country_list = c("AT","BE","BG","CY","CZ","DE","DK","EE","EL","ES","FI","FR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","UK","CH","NO")
   # country_list = c("AT","BE","CH","DE","ES","FR","IT","NL","PT") #???,"BE","BG","CY","CZ","DE","DK","EE","EL","ES","FI","FR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","UK","CH","NO")
