@@ -197,65 +197,6 @@ options( dplyr.summarise.inform = FALSE )
   
   p_new_equipment_lifetime_distribution <- function( equipment_df , sigma = 5 )
   {
-
-    building_types = unique(equipment_df$building_class)
-    construction_years = unique(equipment_df$construction_year)
-    
-    # browser( condition = length( construction_years) > 1 )
-    
-    all_equipment = NULL
-    for( building_type in building_types)
-    {
-      for( construction_year_loop in construction_years )
-      {
-        value_nb_df = equipment_df %>% filter( building_type == building_type, construction_year == construction_year_loop )
-        equipments = unique(value_nb_df$Equipment)
-        
-        for( equipment in equipments )
-        {
-          # browser()
-          value_nb_equipment = value_nb_df %>% filter( building_type == building_type, Equipment == equipment, construction_year == construction_year_loop ) 
-          value_nb_equipment =value_nb_equipment$no_equipment
-          
-          lifetime_equipment = self$EQUIPMENT_MAPPING %>% filter( Equipment == equipment )
-          lifetime_equipment = lifetime_equipment$Lifetime
-          
-          energy_equipment = self$EQUIPMENT_MAPPING %>% filter( Equipment == equipment )
-          energy_equipment = energy_equipment$Energy
-          
-          quantile_vector = seq( lifetime_equipment - sigma, lifetime_equipment + sigma, 1)
-          set.seed(0)
-          tmp_hist = dnorm( quantile_vector, mean = lifetime_equipment, sd = 1)
-          
-
-          # time_tmp_hist1 = Sys.time()
-          tmp_equipment = tibble( Scenario = rep( unique(equipment_df$Scenario), length(tmp_hist)),
-                                  Sector = rep( unique(equipment_df$Sector), length(tmp_hist) ), 
-                                  building_class = rep( building_type, length(tmp_hist) ),
-                                  construction_year = rep( construction_year_loop, length(tmp_hist) ),
-                                  Equipment = rep( equipment, length(tmp_hist) ),
-                                  Energy = rep( energy_equipment, length(tmp_hist) ),
-                                  installation_year = rep( unique(equipment_df$installation_year), length(tmp_hist) ),
-                                  lifetime = quantile_vector ,  
-                                  no_equipment = value_nb_equipment * tmp_hist,
-                                  Year = rep( unique(equipment_df$Year), length(tmp_hist) )
-          )
-          
-          all_equipment = rbind( all_equipment, tmp_equipment )
-        }
-      }
-    }
-    
-    if( equipment_df$Year[1] == 2045 )
-    {
-      browser()
-    }
-
-    return( all_equipment )
-  }
-  
-  p_new_equipment_lifetime_distribution_V2 <- function( equipment_df , sigma = 5 )
-  {
     lifetime_df = self$EQUIPMENT_MAPPING %>% select( -Energy ) 
     equipments = unique(lifetime_df$Equipment)  
 
@@ -287,218 +228,10 @@ options( dplyr.summarise.inform = FALSE )
 
   p_project_equipment_RES <- function()
   {
-    hist_equipment_stock = self$ls_inputs_data$building_stock %>%
-      mutate( building_class = "total" ) %>%
-      select( Sector, building_class, Equipment, Year, Value )
-    
-    market_share = self$ls_inputs_data$market_share %>%
-      filter( Year >= self$projection_year, Sector == "RES" ) %>%
-      rename( building_class = Building_Class, market_share = Value ) %>% 
-      mutate( building_class = case_when( building_class == "new" ~  "construction" , 
-                                          building_class == "renovated" ~  "renovation" ,
-                                          TRUE ~ building_class ) ) %>%
-      select( Scenario, Sector, building_class, Equipment, Year , market_share ) 
-    
-    
-    new_reno = market_share %>% 
-      left_join( self$ls_outputs_data$building_stock ) %>%
-      mutate( equipment_stock = market_share * building_stock )
-    
-    equipment_stock = self$ls_inputs_data$building_stock %>%
-      select( Sector, Year, Equipment )
-    equipment_stock = equipment_stock %>% 
-      tidyr::expand_grid( unique(market_share$Scenario) ) %>%
-      tidyr::expand_grid( self$ls_outputs_data$building_stock$building_class ) %>%
-      unique() %>% filter( Sector == "RES" )
-    
-    names(equipment_stock) = c( "Sector", "Year", "Equipment", "Scenario", "building_class")
-    
-    equipment_stock = equipment_stock %>%
-      left_join( hist_equipment_stock ) %>%
-      left_join( new_reno ) %>%
-      mutate( Value = rowSums( cbind(.$Value, .$equipment_stock), na.rm = T ) ) %>%
-      select( Scenario, Sector, Equipment, Year, building_class, Value) %>%
-      spread( building_class, Value ) %>%
-      mutate( old = total, renovation_destructed = 0 ) %>%
-      rename( renovation_constructed = renovation )
-    
-    equipment_levels = unique( equipment_stock$Equipment ) 
-    scenarios = unique( equipment_stock$Scenario ) 
-    
-    
-    evolution_rate = self$ls_inputs_data$evolution_rate %>% 
-      filter( Year >= self$projection_year, Sector == "RES", Building_Class == "destruction" ) %>%
-      arrange( Sector, Building_Class, Year ) %>% 
-      spread( Building_Class, Value )
-    
-    
-    # browser()
-    for( scenario in scenarios )
-    {
-      for( year in (self$projection_year):2050 )
-      {
-        for( equipment in equipment_levels)
-        {
-          bs_row = which( equipment_stock$Year == year & equipment_stock$Scenario == scenario & equipment_stock$Equipment == equipment )
-          er_row = which( evolution_rate$Year == year )
-          year_row = which( equipment_stock$Year == year & equipment_stock$Scenario == scenario )
-          equipment_stock[ bs_row , ]$destruction = evolution_rate[ er_row , ]$destruction * equipment_stock[ bs_row -1, ]$old
-          equipment_stock[ bs_row , ]$renovation_destructed = equipment_stock[bs_row - 1, ]$old / sum( equipment_stock[year_row - 1, ]$old ) * sum( equipment_stock[ year_row , ]$renovation_constructed ) 
-          equipment_stock[ bs_row , ]$old = equipment_stock[bs_row - 1, ]$old - equipment_stock[bs_row, ]$destruction - equipment_stock[ bs_row, ]$renovation_destructed
-          equipment_stock[ bs_row , ]$total = equipment_stock[ bs_row -1, ]$total + equipment_stock[ bs_row , ]$construction + equipment_stock[ bs_row, ]$renovation_constructed - equipment_stock[ bs_row, ]$renovation_destructed - equipment_stock[ bs_row , ]$destruction 
-        }
-      }
-    }
-  
-    
-    ### eQUIPMENT END OF LIFE
-    equipment_stock$old_brut = NA_real_
-    
-    for( equipment in equipment_levels )
-    {
-      value_old_equipment = unique( equipment_stock[ equipment_stock$Equipment == equipment &
-                                                       equipment_stock$Year == 2019 ,]$old / 20 )
-      
-      eff_rows = which( equipment_stock$Equipment == equipment & equipment_stock$Year > 2019 & equipment_stock$Year < 2041 )
-      equipment_stock[ eff_rows , ]$old_brut = value_old_equipment
-    }
-    
-    equipment_stock = equipment_stock %>% 
-      mutate( old_already_replaced = destruction / 20 + renovation_destructed / 20,
-              old_staying_to_replace = case_when( Year == 2019 ~ old, 
-                                                  TRUE ~ NA_real_ ) )
-    
-    for( equipment in equipment_levels )
-    {
-      for( year in 2019:2039 )
-      {
-        row_n = which( equipment_stock$Equipment == equipment & equipment_stock$Year == year )
-        row_nn =  which( equipment_stock$Equipment == equipment & equipment_stock$Year == year + 1 )
-        
-        equipment_stock[ row_nn , ]$old_staying_to_replace = max( equipment_stock[ row_n , ]$old_staying_to_replace - equipment_stock[ row_nn , ]$old_brut , 0 )
-      }
-    }
-    
-    
-    equipment_stock = equipment_stock %>% 
-      mutate( old_replaced = case_when( old_staying_to_replace > 0 ~ old_brut - old_already_replaced,
-                                        old_staying_to_replace == 0 ~ 0, 
-                                        TRUE ~NA_real_
-                                         ))
-    
-    equipment_stock$old_replaced_cum = NA_real_
-    equipment_stock[equipment_stock$Year == 2020 ,]$old_replaced_cum = equipment_stock[equipment_stock$Year == 2020 ,]$old_replaced
-    
-    for( year in 2021:2040 )
-    {
-      row_n = which( equipment_stock$Year == year - 1 )
-      row_nn =  which( equipment_stock$Year == year )
-      equipment_stock[ row_nn , ]$old_replaced_cum = equipment_stock[ row_nn , ]$old_replaced + equipment_stock[ row_n , ]$old_replaced_cum 
-    }
-    
-    equipment_stock = equipment_stock %>% 
-      mutate( old_true = old - replace_na( old_replaced_cum, 0 ) ) %>%
-      mutate( old_true = case_when( old_true < 0 ~ 0 ,
-                               TRUE ~ old_true )) %>%
-      mutate( old_true = case_when( Year > 2039 ~0, 
-                                    TRUE ~ old_true ))
-      
-    
-    market_shares_construction = market_share %>%
-      filter( building_class == "construction" ) %>%
-      select( -building_class) %>%
-      rename( market_share_construction = market_share )
-    
-    market_shares_renovation = market_share %>%
-      filter( building_class == "renovation" ) %>%
-      select( -building_class) %>%
-      rename( market_share_renovation = market_share )
-    
-    total_old_replaced_2020_2040 = equipment_stock %>%
-      mutate( old_really_replaced = case_when( old_true > 0 ~ old_replaced ,
-                                               TRUE ~ 0 ) ) %>%
-      group_by( Scenario, Sector ,Year ) %>%
-      summarise( total_old_replaced_2020_2040 = sum( old_really_replaced ) ) 
-    
-    
-    
-    mapping_year = tibble( Year = seq( 2020 , 2030 ), 
-                           new_year = seq( 2040 , 2050 ) )
-      
-    
-    total_per_year_old_true = equipment_stock %>%
-      group_by( Scenario, Sector, Year ) %>%
-      summarise( total_old_true = sum( old_true, na.rm = T ) ) 
-    
-    market_share_old_true = equipment_stock %>%
-      select( Scenario, Sector, Equipment, Year, old_true ) %>%
-      left_join( total_per_year_old_true ) %>%
-      mutate( market_share_old = old_true / total_old_true ) %>%
-      select( -c( old_true, total_old_true ) )
-  
-    
-    # browser() 
-    equipment_stock = equipment_stock %>%
-      left_join( market_shares_renovation ) %>%
-      left_join( market_shares_construction ) %>%
-      left_join( total_old_replaced_2020_2040 ) %>%
-      left_join( market_share_old_true ) %>%
-      mutate( market_shares_2020_2040 = market_share_construction + market_share_old ) %>%
-      mutate( old_new_flux_2020_2040 = total_old_replaced_2020_2040 * 0.5 * market_shares_2020_2040 )
-    
-    # test = equipment_stock %>%
-    #   group_by( Scenario, Sector, Year )%>%
-    #   summarise( old = sum( old , na.rm = T ), 
-    #              old_true = sum( old_true, na.rm = T ) , 
-    #              old_new = sum( old_new_flux_2020_2040, na.rm = T ) ) %>%
-    #   ungroup() %>%
-    #   group_by( Scenario, Sector )%>%
-    #   summarise( old_new_cum = cumsum( old_new ), old = old, old_true = old_true, Year = Year) %>%
-    #   mutate( old_check = old_new_cum + old_true )
-    
-    
-    # browser()
-    
-    total_old_replaced_2040_2050 = total_old_replaced_2020_2040 %>%
-      left_join( mapping_year ) %>%
-      select( -Year ) %>%
-      rename( Year = new_year, total_old_replaced_2040_2050 = total_old_replaced_2020_2040 )
-  
-    equipment_stock = equipment_stock %>%
-      left_join( total_old_replaced_2040_2050 ) %>%
-      mutate( old_new_flux_2040_2050 = total_old_replaced_2040_2050 * market_share_construction,
-              old_new_flux = replace_na( old_new_flux_2020_2040, 0 ) + replace_na( old_new_flux_2040_2050, 0 ) ) 
-    
-    construction_renovation_2040_2050 = equipment_stock %>%
-      select( Scenario, Sector, Equipment, Year , construction, renovation_constructed ) %>%
-      group_by( Scenario, Sector ,Year ) %>%
-      summarise( total_construction_replaced_2040_2050 = sum( construction ), total_renovation_replaced_2040_2050 = sum( renovation_constructed ) ) %>%
-      left_join( mapping_year ) %>%
-      select( -Year ) %>%
-      rename( Year = new_year )
-    
-    equipment_stock = equipment_stock %>%
-      left_join( construction_renovation_2040_2050 ) %>%
-      mutate( construction_new = total_construction_replaced_2040_2050 * market_share_construction, 
-              renovation_new = total_renovation_replaced_2040_2050 * market_share_renovation, 
-              construction = replace_na( construction_new , 0 ) + construction,
-              renovation = replace_na( renovation_new , 0 ) + renovation_constructed )
-    
-    equipment_stock = equipment_stock %>%
-    select( -old ) %>%
-    rename( old = old_true) %>%  
-    select( Scenario, Sector, Equipment, Year, construction, destruction, old, old_new_flux, renovation_constructed, renovation_destructed )
-      
-    equipment_stock = equipment_stock %>% gather( key = "building_class", value = "equipment_stock", 5:length(equipment_stock))
-    
-    return(equipment_stock)
-  }
-  
-  p_project_equipment_RES_v2 <- function()
-  {
-   
+    ### Inititialization of needed parameters 
     print("Stock projection initialization") 
     
+    #Market share in construction and renovation buildings 
     market_share = self$ls_inputs_data$market_share %>%
       filter( Year >= self$projection_year, Sector == "RES" ) %>%
       rename( building_class = Building_Class, market_share = Value ) %>% 
@@ -507,22 +240,22 @@ options( dplyr.summarise.inform = FALSE )
                                           TRUE ~ building_class ) ) %>%
       select( Scenario, Sector, building_class, Equipment, Energy, Year , market_share ) 
     
+    #Evolution rate ()% construction and renovation build each year)
     evolution_rate = self$ls_inputs_data$evolution_rate %>% 
       filter( Year >= self$projection_year, Sector == "RES" )
 
+    # Assignaation of lifetime for equipment in old building ( uniform distribution)
     old_bs_starting_point = self$old_equipment_lifetime_distribution() %>% 
       filter( Sector == "RES" )
     
-    equipment_levels = unique( market_share$Equipment ) 
     scenarios = unique( market_share$Scenario )
-  
-    STOCK_EQUIPMENT <- NULL
+    STOCK_EQUIPMENT = NULL
 
-    # bstock_total = old_bs_starting_point
     print("Start of stock projection loop") 
     
     for( scenario in scenarios )
     {
+      # Initialization of stock dataframe for the current scenario
       bs_old = old_bs_starting_point
       bs_construction = NULL
       bs_renovation = NULL
@@ -532,6 +265,7 @@ options( dplyr.summarise.inform = FALSE )
       bstock_construction = NULL
       bstock_renovation = NULL 
       
+      # Cumulative stock dataframe for old building initialization 
       bstock_old = old_bs_starting_point %>%
         group_by(  Sector, building_class, construction_year, Equipment, Energy, installation_year,  Year ) %>%
         summarise( no_equipment = sum( no_equipment, na.rm = T ) ) %>%
@@ -543,469 +277,398 @@ options( dplyr.summarise.inform = FALSE )
       {
         print( paste( scenario , ":", year ) )
 
-        # time1 = Sys.time()
-
+        # Evolution rate and market share dataframe for the current year
         evolution_rate_tmp = evolution_rate %>% filter( Year == year )
         market_share_tmp = market_share %>% filter( Year == year, Scenario == scenario )
 
+        ################################ 1. Flux calculation per building class #########################################################
+        construction_tmp = ( evolution_rate_tmp %>% filter( Building_Class == "construction" ))$Value 
+        renovation_tmp = ( evolution_rate_tmp %>% filter( Building_Class == "renovation" ))$Value 
+        destruction_tmp = ( evolution_rate_tmp %>% filter( Building_Class == "destruction" ))$Value 
         
-          # 1. Calcul des flux construction renovation positive
-          
-          construction_tmp = ( evolution_rate_tmp %>% filter( Building_Class == "construction" ))$Value 
-          renovation_tmp = ( evolution_rate_tmp %>% filter( Building_Class == "renovation" ))$Value 
-          destruction_tmp = ( evolution_rate_tmp %>% filter( Building_Class == "destruction" ))$Value 
-          
-          market_share_construction_tmp = market_share_tmp %>% filter( building_class == "construction")
-          market_share_renovation_tmp = market_share_tmp %>% filter( building_class == "renovation")
-          
-          total_bs_year_before = sum( (bstock_total %>% filter( Year ==  year - 1  ) )$no_equipment ) 
-          total_bs_construction_tmp  =  construction_tmp * total_bs_year_before
-          total_bs_renovation_tmp  =  renovation_tmp * total_bs_year_before
-          total_bs_destruction_tmp  =  destruction_tmp * total_bs_year_before
-          
-          # bs_construction_tmp = old_bs_starting_point %>% mutate( installation_year = year, building_class = "construction", no_equipment = 0 )
-          # bs_renovation_tmp = old_bs_starting_point %>% mutate( installation_year = year, building_class = "renovation", no_equipment = 0 )
-          # 
-
-          # share in old building
-          
-          
-          share_bs_old <- bstock_old %>%
-            filter( Year == year-1 ) %>%
-            group_by( Sector, building_class, Equipment, Energy ) %>%
-            summarise( no_equipment = sum( no_equipment , na.rm = T ) ) %>%
-            ungroup() %>%
-            mutate( market_share = no_equipment / sum( no_equipment, na.rm = T ) )
+        market_share_construction_tmp = market_share_tmp %>% filter( building_class == "construction")
+        market_share_renovation_tmp = market_share_tmp %>% filter( building_class == "renovation")
         
-          
-          #### Flux calculation
-          {
-          
-          # browser()
+        total_bs_year_before = sum( (bstock_total %>% filter( Year ==  year - 1  ) )$no_equipment ) 
+        total_bs_construction_tmp  =  construction_tmp * total_bs_year_before
+        total_bs_renovation_tmp  =  renovation_tmp * total_bs_year_before
+        total_bs_destruction_tmp  =  destruction_tmp * total_bs_year_before
         
-          flux_construction_tmp <- market_share_construction_tmp %>%
-            mutate( no_equipment = market_share * total_bs_construction_tmp ) %>%
-            rename( installation_year = Year ) %>%
-            mutate( construction_year = year, Year = year ) %>%  
-            select( -market_share ) %>%
-            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
-          
-          flux_renovation_positif_tmp <- market_share_renovation_tmp %>%
-            mutate( no_equipment = market_share * total_bs_renovation_tmp ) %>%
-            rename( installation_year = Year ) %>%
-            mutate( construction_year = year, Year = year ) %>%  
-            select( -market_share ) %>%
-            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
+
+        # share of each equipment in old building
+        share_bs_old <- bstock_old %>%
+          filter( Year == year-1 ) %>%
+          group_by( Sector, building_class, Equipment, Energy ) %>%
+          summarise( no_equipment = sum( no_equipment , na.rm = T ) ) %>%
+          ungroup() %>%
+          mutate( market_share = no_equipment / sum( no_equipment, na.rm = T ) )
+      
         
-          # logement renove a enlever dans le stock ancien ; flux de destruction de l'ancien lie a la renovation
-          flux_renovation_negatif_tmp <- share_bs_old %>%
-            mutate( no_equipment = market_share * total_bs_renovation_tmp ) %>%
-            mutate( Scenario = scenario,
-                    construction_year = NA_real_ , 
-                    Year = year, 
-                    installation_year = NA_real_ ) %>%  
-            select( -market_share ) %>%
-            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
-          
-          # flux de destruction de l'ancien dans l'ancien
-          flux_destruction_tmp <- share_bs_old %>%
-            mutate( no_equipment = market_share * total_bs_destruction_tmp ) %>%
-            mutate( Scenario = scenario,
-                    construction_year = NA_real_ , 
-                    Year = year, 
-                    installation_year = NA_real_ ) %>%  
-            select( -market_share ) %>%
-            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
-          
-
-          
-          # time2 = Sys.time()
-          # print( time2 - time1 )
-          # associate a lifetime to all equipments in renovated and new (flux)
-          ## new
-
-          # time3 = Sys.time()
-          flux_construction_tmp <- self$new_equipment_lifetime_distribution( flux_construction_tmp ) %>%
-            mutate( Year = year)
-
-          # time4 = Sys.time()
-          # print( time4 - time3 )
-          ## renovation
-          flux_renovation_positif_tmp <- self$new_equipment_lifetime_distribution( flux_renovation_positif_tmp ) %>%
-            mutate( Year = year)
-          }
-          
-          #### Demolished and renovated buildings to substract to old stock building
-          {
-
-          
-          
-            
-          bs_old_total <- bs_old %>% # intermediate results necessary to calculate the share of old building to be replaced BY LIFETIME
-            group_by( Sector, building_class, Equipment, Energy ) %>%
-            summarise( no_equipment_total = sum(no_equipment, na.rm = TRUE) )
-          
-          ###################### Correction bug pas assez de destruction ##########################
-          value_old_remaining = sum( (bstock_old %>% filter( Year == year-1 ))$no_equipment )
-          
-          if( is.na( sum( flux_renovation_negatif_tmp$no_equipment ) ) ) ### Gestion quand sotck de batiment ancien est nul donc share_bs_old = NA
-          {
-            # browser()
-            to_be_destroyed = total_bs_renovation_tmp + total_bs_destruction_tmp
-            # browser()
-          }
-          else 
-          {
-            to_be_destroyed = sum( flux_renovation_negatif_tmp$no_equipment ) + sum( flux_destruction_tmp$no_equipment )
-          }
-          
-         
-          # browser()
-
-          if( to_be_destroyed > value_old_remaining ) # gestion des annees ou le stock d'ancien est nul
-          {
-            
-            bs_old <- bs_old %>%
-              mutate( Year = year ) %>%
-              mutate( no_equipment = case_when( to_be_destroyed > value_old_remaining ~ 0,
-                                                TRUE ~ no_equipment ) )
-          }
-          else { # Gestion des annees ou il reste du stock d'ancien
-            bs_old <- bs_old %>%
-            filter( Year == year -1 ) %>%
-            mutate(Scenario = scenario) %>%
-            left_join( bs_old_total , by = c("Sector", "building_class", "Equipment", "Energy") ) %>%
-            left_join( flux_destruction_tmp, by = c("Sector", "building_class", "Equipment", "Energy") ) %>%
-            left_join( flux_renovation_negatif_tmp, by = c("Sector", "building_class", "Equipment", "Energy") ) %>%
-            select( -c( construction_year, 
-                        construction_year.y,
-                        installation_year,
-                        installation_year.y,
-                        Year,
-                        Year.x,
-                        Scenario.x,
-                        Scenario.y )) %>%
-            rename( flux_renovation = no_equipment,
-                    flux_destruction = no_equipment.y,
-                    no_equipment = no_equipment.x,
-                    Year = Year.y,
-                    construction_year = construction_year.x,
-                    installation_year = installation_year.x,
-                    ) %>%
-            mutate( market_share = no_equipment / no_equipment_total, #market share pour un equipement pour chaque lifetime
-                    flux_destruction = flux_destruction * market_share, 
-                    flux_renovation = flux_renovation * market_share,
-                    no_equipment = no_equipment - flux_destruction - flux_renovation, # Update du stock d'ancien
-                    no_equipment = case_when( is.na( no_equipment ) ~ 0, TRUE ~ no_equipment )
-                    )  %>%  
-            select( -c( market_share, flux_destruction, flux_renovation, no_equipment_total ) ) %>%
-            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, lifetime, no_equipment, Year )
-          }
-         
-          # Calculer equipement en fin de vie dans l'ancien 
-          # Appliquer le Alpha pour voir quel equipement reste dans le stock
-          
-          
-          bs_old <- bs_old %>%  # enlever une annee de lifetime a tous les equipements 
-            mutate( lifetime = lifetime - 1 )
-          
-          flux_obsol_total = bs_old %>% # deduire le flux d'equipement en fin de vie
-            filter( lifetime == 0 )
-          flux_obsol_total = sum( flux_obsol_total$no_equipment, na.rm = TRUE )
-          
-          bs_obsol <- bs_old %>% # equipements qui sortent ; ceux qui ont plus de lifetime
-            filter( lifetime == 0 )
-          
-          # print( paste( "Flux_old_EOF_negative:", sum( bs_obsol$no_equipment ) ) )
-          
-          
-          bs_old <- bs_old %>% # enlever ces equipements qui sortent du stock old
-            filter( lifetime != 0 )
+        ################################ 2. Flux calculation per equipment #########################################################
+        # Posiitve flux of construction 
+        flux_construction_tmp <- market_share_construction_tmp %>%
+          mutate( no_equipment = market_share * total_bs_construction_tmp ) %>%
+          rename( installation_year = Year ) %>%
+          mutate( construction_year = year, Year = year ) %>%  
+          select( -market_share ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
         
-          # appliquer alpha (part des equipements dans l'ancien qui reste )
-          
-          # browser()  
-          
+        # Positive flus of renovation (building state afeter renovation) 
+        flux_renovation_positif_tmp <- market_share_renovation_tmp %>%
+          mutate( no_equipment = market_share * total_bs_renovation_tmp ) %>%
+          rename( installation_year = Year ) %>%
+          mutate( construction_year = year, Year = year ) %>%  
+          select( -market_share ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
+      
+        # Negative flux due to renovation (to be destroyed in old building)          
+        flux_renovation_negatif_tmp <- share_bs_old %>%
+          mutate( no_equipment = market_share * total_bs_renovation_tmp ) %>%
+          mutate( Scenario = scenario,
+                  construction_year = NA_real_ , 
+                  Year = year, 
+                  installation_year = NA_real_ ) %>%  
+          select( -market_share ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
+        
+        # Negative flux in old building due to building end of life 
+        flux_destruction_tmp <- share_bs_old %>%
+          mutate( no_equipment = market_share * total_bs_destruction_tmp ) %>%
+          mutate( Scenario = scenario,
+                  construction_year = NA_real_ , 
+                  Year = year, 
+                  installation_year = NA_real_ ) %>%  
+          select( -market_share ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
+        
+
+        ### lifetime assignation for all equipments for the fluw of renovated and new building (based on normal distribution)
+        # new
+        flux_construction_tmp <- self$new_equipment_lifetime_distribution( flux_construction_tmp ) %>%
+          mutate( Year = year)
+
+        # renovation
+        flux_renovation_positif_tmp <- self$new_equipment_lifetime_distribution( flux_renovation_positif_tmp ) %>%
+          mutate( Year = year)
+        
+        
+
+        ################################ 3. Update of old building stock #########################################################
+        ### Demolished and renovated buildings to substract to old stock building
+        bs_old_total <- bs_old %>% # intermediate results necessary to calculate the share of old building to be replaced BY LIFETIME
+          group_by( Sector, building_class, Equipment, Energy ) %>%
+          summarise( no_equipment_total = sum(no_equipment, na.rm = TRUE) )
+        
+        ### Management of years where old building stock is completely destroyed  
+        value_old_remaining = sum( (bstock_old %>% filter( Year == year-1 ))$no_equipment )
+        
+        if( is.na( sum( flux_renovation_negatif_tmp$no_equipment ) ) ) ### Old building stock is empty so share_bs_old = NA
+        {
+          to_be_destroyed = total_bs_renovation_tmp + total_bs_destruction_tmp
+        }
+        else 
+        {
+          to_be_destroyed = sum( flux_renovation_negatif_tmp$no_equipment ) + sum( flux_destruction_tmp$no_equipment )
+        }
+
+        ### Management of years where old building stock is below negative flux (destruction and renovation)  
+        if( to_be_destroyed > value_old_remaining ) 
+        {
+          # If not enough old building stock, the old building stock is reaching zero 
+          bs_old <- bs_old %>%
+            mutate( Year = year ) %>%
+            mutate( no_equipment = case_when( to_be_destroyed > value_old_remaining ~ 0,
+                                              TRUE ~ no_equipment ) )
+        }
+        else 
+        { 
+          bs_old <- bs_old %>%
+          filter( Year == year -1 ) %>%
+          mutate(Scenario = scenario) %>%
+          left_join( bs_old_total , by = c("Sector", "building_class", "Equipment", "Energy") ) %>%
+          left_join( flux_destruction_tmp, by = c("Sector", "building_class", "Equipment", "Energy") ) %>%
+          left_join( flux_renovation_negatif_tmp, by = c("Sector", "building_class", "Equipment", "Energy") ) %>%
+          select( -c( construction_year, 
+                      construction_year.y,
+                      installation_year,
+                      installation_year.y,
+                      Year,
+                      Year.x,
+                      Scenario.x,
+                      Scenario.y )) %>%
+          rename( flux_renovation = no_equipment,
+                  flux_destruction = no_equipment.y,
+                  no_equipment = no_equipment.x,
+                  Year = Year.y,
+                  construction_year = construction_year.x,
+                  installation_year = installation_year.x,
+                  ) %>%
+          mutate( market_share = no_equipment / no_equipment_total, #market share pour un equipement pour chaque lifetime
+                  flux_destruction = flux_destruction * market_share, 
+                  flux_renovation = flux_renovation * market_share,
+                  no_equipment = no_equipment - flux_destruction - flux_renovation, # Update du stock d'ancien
+                  no_equipment = case_when( is.na( no_equipment ) ~ 0, TRUE ~ no_equipment )
+                  )  %>%  
+          select( -c( market_share, flux_destruction, flux_renovation, no_equipment_total ) ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, lifetime, no_equipment, Year )
+        }
+        
+
+        ################################ 4. Flux calculation of obsolet equipment in old building ################################################
+        # Subtract one year of lifetime to all equipment
+        bs_old <- bs_old %>%  
+          mutate( lifetime = lifetime - 1 )
+        
+        # Calculation of the total nomber of equipment reaching their lifetime
+        flux_obsol_total = bs_old %>% 
+          filter( lifetime == 0 )
+        flux_obsol_total = sum( flux_obsol_total$no_equipment, na.rm = TRUE )
+        
+        # Exact dataframe of equipment reaching their lifetime (lifetime = 0) 
+        bs_obsol <- bs_old %>% 
+          filter( lifetime == 0 )
+        
+        # remove from the stock of old equipment these equipment (with lifetime == 0)
+        bs_old <- bs_old %>%
+          filter( lifetime != 0 )
+
+        ### Process to determine the flux of obsolet equipment keeping the same technology and the one changing 
+        # Number of equipment that will not changed of heating technologies when reaching its lifetime
+        flux_obsol_alpha <- bs_obsol %>%
+          left_join( self$EQUIPMENT_ALPHA, by = "Equipment") %>%
+          mutate( no_equipment = alpha * no_equipment ) %>%
+          select( -c( lifetime, alpha ) ) %>%
+          mutate( installation_year = year )
+        
+        # Number of equipment that will changed of heating technologies when reaching its lifetime (with contructon market shares)
+        noEquipmentNotSubstitute = sum( flux_obsol_alpha$no_equipment ) 
+        flux_obsol_minus_alpha <- market_share_construction_tmp %>%
+          mutate( no_equipment = market_share * ( flux_obsol_total - noEquipmentNotSubstitute ) ) %>%
+          mutate( building_class = "old",
+                  installation_year = year, 
+                  construction_year = self$projection_year -1 ) %>% # Ancien donc meme annee de construction tout le long
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
+        
+        # Binding of both flux to get the whole flux of new equipment replacing the obsolet ones 
+        flux_obsol <- flux_obsol_alpha %>%
+          rbind( flux_obsol_minus_alpha ) %>%
+          group_by(Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year) %>%
+          summarise(no_equipment = sum(no_equipment, na.rm = TRUE) ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
+
+        # Lifetime assignation to the whole flux new equipment replacing the obsolet one 
+        if( to_be_destroyed > value_old_remaining )
+        {
+          flux_obsol <- NULL
+        }
+        else
+        {
+          flux_obsol <- self$new_equipment_lifetime_distribution( flux_obsol )
+        }
+        
+        # Addition of this flux in the stock of old building dataframe
+        bs_old <- rbind(bs_old, flux_obsol)
+
+
+        ################################ 5. Update of new and renovated building stock #########################################################
+        ### Lifetime update for new and renovated buildings
+        if(!is.null(bs_construction))
+        {
+          bs_construction <- bs_construction %>% # take out lifetime
+            mutate(lifetime = lifetime-1)
+        }
+    
+        if(!is.null(bs_renovation))
+        {
+          bs_renovation <- bs_renovation %>%  # take out lifetime
+            mutate(lifetime = lifetime-1)
+        }
+      
+        ### Management of the flux of destruction and renovation when old building stock is null ( then destroyed in new and renovated building class )
+        to_be_destroyed_in_new_and_reno = to_be_destroyed - value_old_remaining 
+        if( to_be_destroyed_in_new_and_reno > 0 ) 
+        {
+          # Calculation of the share of building destroyed respectively in construction and renovation building (based on the two stock ratio) 
+          new_total = sum( bs_construction$no_equipment )
+          reno_total = sum( bs_renovation$no_equipment )
+
+          to_be_destroyed_in_new = to_be_destroyed_in_new_and_reno * new_total / ( new_total + reno_total )
+          to_be_destroyed_in_reno = to_be_destroyed_in_new_and_reno - to_be_destroyed_in_new
+
+          bs_construction <- bs_construction %>% ungroup() %>%
+            mutate( ms_new = case_when( no_equipment == 0 ~ 0,
+                                        TRUE ~ no_equipment/sum( no_equipment, na.rm = TRUE ) ) ) %>%# share of destruction for each type of equipment uniformaly spread out
+            mutate( no_equipment = no_equipment - ms_new * to_be_destroyed_in_new ) %>% # Destruction of the good amount of equipment
+            select( -c( ms_new ) )
+
+          bs_renovation <- bs_renovation %>% ungroup() %>%
+            mutate( ms_reno = case_when( no_equipment == 0 ~ 0,
+                                          TRUE ~ no_equipment/sum( no_equipment, na.rm = TRUE ) ) ) %>%# share of destruction for each type of equipment uniformaly spread out
+            mutate( no_equipment = no_equipment - ms_reno * to_be_destroyed_in_reno ) %>%
+            select( -c( ms_reno ) )
+        }
+
+        ### Addition in the respective stock dataframe of the flux of contruction and renovation regarding the current year
+        bs_construction <-rbind(bs_construction, flux_construction_tmp) %>% mutate( Year = year )
+        bs_renovation <- rbind(bs_renovation, flux_renovation_positif_tmp) %>% mutate( Year = year )
+        
+
+        ################################ 6. Flux calculation of obsolet equipment in new building ################################################
+        # Calculation of the total nomber of equipment reaching their lifetime
+        flux_obsol_total = bs_construction %>% # deduire le flux d'equipement en fin de vie
+          filter( lifetime == 0 ) %>%
+          group_by( construction_year ) %>%
+          summarise( no_equipment_total = sum( no_equipment , na.rm = T ) ) 
+        
+        # Exact dataframe of equipment reaching their lifetime (lifetime = 0) 
+        bs_obsol <- bs_construction %>% # equipement qui sortent ; ceux qui ont plus de lifetime
+          filter( lifetime == 0 )
+
+        # Remove obsolet equipment in the construcion stock dataframe   
+        bs_construction <- bs_construction %>% 
+          filter( lifetime != 0 )
+        
+        ### Management of obsolet equipment in contruction building class
+        if( nrow(bs_obsol) > 0 ) 
+        {
+          # Number of equipment that will not changed of heating technologies when reaching its lifetimee
           flux_obsol_alpha <- bs_obsol %>%
-            left_join( self$EQUIPMENT_ALPHA, by = "Equipment") %>%
+            left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
             mutate( no_equipment = alpha * no_equipment ) %>%
-            select( -c( lifetime, alpha ) ) %>%
-            mutate( installation_year = year )
-          
-          noEquipmentNotSubstitute = sum( flux_obsol_alpha$no_equipment ) # Number of equipment that will not changed of heating technologies when reaching its lifetime
+            mutate( installation_year = year ) %>%
+            select( -c( lifetime, alpha ) )
+
+          # Update of the tolal number of obsolet equipment subtract with the previous amount of equipment staying with the same technology
+          flux_obsol_total = flux_obsol_alpha %>%
+            group_by( construction_year ) %>%
+            summarise( no_equipment = sum ( no_equipment ) ) %>%
+            left_join( flux_obsol_total, by = "construction_year" ) %>%
+            mutate( no_equipment_total = no_equipment_total - no_equipment ) %>%
+            select( -no_equipment )
+
+          # Number of equipment that will changed of heating technologies when reaching its lifetime
           flux_obsol_minus_alpha <- market_share_construction_tmp %>%
-            mutate( no_equipment = market_share * ( flux_obsol_total - noEquipmentNotSubstitute ) ) %>%
-            mutate( building_class = "old",
-                    installation_year = year, 
-                    construction_year = self$projection_year -1 ) %>% # Ancien donc meme annee de construction tout le long
+            merge( flux_obsol_total %>% select( construction_year ) ) %>%
+            left_join( flux_obsol_total, by = "construction_year" ) %>%
+            mutate( no_equipment = market_share * no_equipment_total ) %>%
+            mutate( building_class = "construction",
+                    installation_year = year ) %>%
             select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
-          
+
+          # Binding of both flux to get the whole flux of new equipment replacing the obsolet ones
           flux_obsol <- flux_obsol_alpha %>%
             rbind( flux_obsol_minus_alpha ) %>%
-            group_by(Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year) %>%
-            summarise(no_equipment = sum(no_equipment, na.rm = TRUE) ) %>%
+            group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year) %>%
+            summarise( no_equipment = sum(no_equipment, na.rm = TRUE) ) %>%
             select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
-            # 
-          
-          
-          # appliquer function lifetime apres installation
-
-          if( to_be_destroyed > value_old_remaining )
-          {
-            flux_obsol <- NULL
-          }
-          else{
-            flux_obsol <- self$new_equipment_lifetime_distribution( flux_obsol )
-          }
-          
-          
-          # print( paste( "Flux_old_EOF_positive:", sum( flux_obsol$no_equipment ) ) )
-          
-          # rajouter le flux d'equipement qui remplacent les equipements anciens en fin de vie dans le stock ancien
-          bs_old <- rbind(bs_old, flux_obsol)
-          
-          }
-          
-          
-        
-          # 5. Calculer equipement en fin de vie dans construction et renovation
-          {
-    
             
-            if(!is.null(bs_construction)){
-            bs_construction <- bs_construction %>% # take out lifetime
-              mutate(lifetime = lifetime-1)
-            }
+          # Lifetime assignation for new equipment replacing obsolet ones
+          flux_obsol <- self$new_equipment_lifetime_distribution( flux_obsol )
+        }
+        else
+        {
+          flux_obsol <- NULL
+        }
+
+        # Addition of this flux in the stock of construction building dataframe
+        bs_construction <- rbind(bs_construction, flux_obsol)
+
+        ################################ 7. Flux calculation of obsolet equipment in renovated building ################################################
+        # Calculation of the total nomber of equipment reaching their lifetime
+        flux_obsol_total = bs_renovation %>% 
+          filter( lifetime == 0 ) %>%
+          group_by( construction_year ) %>%
+          summarise( no_equipment_total = sum( no_equipment , na.rm = T ) ) 
         
-            if(!is.null(bs_renovation)){
-              bs_renovation <- bs_renovation %>%  # take out lifetime
-                mutate(lifetime = lifetime-1)
-            }
+        # Exact dataframe of equipment reaching their lifetime (lifetime = 0) 
+        bs_obsol <- bs_renovation %>% 
+          filter( lifetime == 0 )
+
+        # Remove obsolet equipment in the renovation stock dataframe  
+        bs_renovation <- bs_renovation %>% 
+          filter( lifetime != 0 )
         
-            ################################## Construction reaching lifetime ###################################################
-          
-          to_be_destroyed_in_new_and_reno = to_be_destroyed - value_old_remaining # in new and renovated
+        ### Management of obsolet equipment in renovation building class 
+        if( nrow(bs_obsol) > 0 ) 
+        {
+          # Number of equipment that will not changed of heating technologies when reaching its lifetimee
+          flux_obsol_alpha <- bs_obsol %>%
+            left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
+            mutate( no_equipment = alpha * no_equipment ) %>%
+            mutate( installation_year = year ) %>%
+            select(- c( lifetime, alpha ) )
 
-          if( to_be_destroyed_in_new_and_reno > 0 ) # Gestion des annees ou le sotck d'ancien est nul, on doit donc détuire du rénové et du neuf
-          {
-            # print( paste( "Stock contruction avant destruction:", sum( bs_construction$no_equipment ) ) )
-            # print( paste( "Stock renovation avant destruction:", sum( bs_renovation$no_equipment ) ) )
-            # print( paste( "Logement à détruire dans le pas ancien:", to_be_destroyed_in_new_and_reno ) )
-
-            # browser()  
-            new_total = sum( bs_construction$no_equipment )
-            reno_total = sum( bs_renovation$no_equipment )
-
-            to_be_destroyed_in_new = to_be_destroyed_in_new_and_reno * new_total / ( new_total + reno_total )
-            to_be_destroyed_in_reno = to_be_destroyed_in_new_and_reno - to_be_destroyed_in_new
-
-            bs_construction <- bs_construction %>% ungroup() %>%
-              mutate( ms_new = case_when( no_equipment == 0 ~ 0,
-                                          TRUE ~ no_equipment/sum( no_equipment, na.rm = TRUE ) ) ) %>%# share of destruction for each type of equipment uniformaly spread out
-              mutate( no_equipment = no_equipment - ms_new * to_be_destroyed_in_new ) %>% # destruction du bon nombre dequipment
-              select( -c( ms_new ) )
-
-            bs_renovation <- bs_renovation %>% ungroup() %>%
-              mutate( ms_reno = case_when( no_equipment == 0 ~ 0,
-                                           TRUE ~ no_equipment/sum( no_equipment, na.rm = TRUE ) ) ) %>%# share of destruction for each type of equipment uniformaly spread out
-              mutate( no_equipment = no_equipment - ms_reno * to_be_destroyed_in_reno ) %>%
-              select( -c( ms_reno ) )
-
-            # print( paste( "Stock contruction après destruction:", sum( bs_construction$no_equipment ) ) )
-            # print( paste( "Stock renovation après destruction:", sum( bs_renovation$no_equipment ) ) )
-          }
-
-          bs_construction <-rbind(bs_construction, flux_construction_tmp) %>% mutate( Year = year )
-          bs_renovation <- rbind(bs_renovation, flux_renovation_positif_tmp) %>% mutate( Year = year )
-          
-     
-          flux_obsol_total = bs_construction %>% # deduire le flux d'equipement en fin de vie
-            filter( lifetime == 0 ) %>%
+          # Update of the tolal number of obsolet equipment subtract with the previous amount of equipment staying with the same technology
+          flux_obsol_total = flux_obsol_alpha %>%
             group_by( construction_year ) %>%
-            summarise( no_equipment_total = sum( no_equipment , na.rm = T ) ) 
-          
-          bs_obsol <- bs_construction %>% # equipement qui sortent ; ceux qui ont plus de lifetime
-            filter( lifetime == 0 )
-          
-          # print( paste( "flux obsol before alpha:", sum( bs_obsol$no_equipment ) ) )
+            summarise( no_equipment = sum ( no_equipment ) ) %>%
+            left_join( flux_obsol_total, by = "construction_year" ) %>%
+            mutate( no_equipment_total = no_equipment_total - no_equipment ) %>%
+            select( -no_equipment )
 
-          # print( paste( "bs_construction before negative flux:", sum( bs_construction$no_equipment ) ) )
-
-          bs_construction <- bs_construction %>% # enlever ces equipements qui sortent du stock construction
-            filter( lifetime != 0 )
+          # Number of equipment that will changed of heating technologies when reaching its lifetime
+          flux_obsol_minus_alpha <- market_share_construction_tmp %>%
+            merge( flux_obsol_total %>% select( construction_year ) ) %>%
+            left_join( flux_obsol_total, by = "construction_year" ) %>%
+            mutate( no_equipment = market_share * no_equipment_total ) %>%
+            mutate( building_class = "renovation",
+                    installation_year = year ) %>%
+            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
           
-          # print( paste( "bs_construction after negative flux:", sum( bs_construction$no_equipment ) ) )
-          # appliquer alpha ; inertie lors du changement d'un equipement
+          # Binding of both flux to get the whole flux of new equipment replacing the obsolet ones
+          flux_obsol <- flux_obsol_alpha %>%
+            rbind( flux_obsol_minus_alpha ) %>%
+            group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year) %>%
+            summarise( no_equipment = sum(no_equipment, na.rm = TRUE) ) %>%
+            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
           
-          if( nrow(bs_obsol) > 0 ) #On applique alpha uniqement quand bs_obsol n'est pas vide
-          {
-            flux_obsol_alpha <- bs_obsol %>%
-              left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
-              mutate( no_equipment = alpha * no_equipment ) %>%
-              mutate( installation_year = year ) %>%
-              select( -c( lifetime, alpha ) )
-            
-            # print( paste( "bs_renovation after positive alpha flux:", sum( flux_obsol_alpha$no_equipment ) ) )
-
-            # Calculatino of equipment that will be subsitute with other equipment that the one reaching its end of life
-            flux_obsol_total = flux_obsol_alpha %>%
-              group_by( construction_year ) %>%
-              summarise( no_equipment = sum ( no_equipment ) ) %>%
-              left_join( flux_obsol_total, by = "construction_year" ) %>%
-              mutate( no_equipment_total = no_equipment_total - no_equipment ) %>%
-              select( -no_equipment )
-
-             # Number of equipment that will not changed of heating technologies when reaching its lifetime
-            flux_obsol_minus_alpha <- market_share_construction_tmp %>%
-              merge( flux_obsol_total %>% select( construction_year ) ) %>%
-              left_join( flux_obsol_total, by = "construction_year" ) %>%
-              mutate( no_equipment = market_share * no_equipment_total ) %>%
-              mutate( building_class = "construction",
-                      installation_year = year ) %>%
-              select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
-            
-            # print( paste( "bs_renovation after positive minus alpha flux:", sum( flux_obsol_minus_alpha$no_equipment ) ) )
-            
-            flux_obsol <- flux_obsol_alpha %>%
-              rbind( flux_obsol_minus_alpha ) %>%
-              group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year) %>%
-              summarise( no_equipment = sum(no_equipment, na.rm = TRUE) ) %>%
-              select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
-              
-            # appliquer function lifetime apres installation
-            # print( paste( "flux before lifetime:", sum( flux_obsol$no_equipment ) ) ) 
-            # time5 =Sys.time()
-
-            flux_obsol <- self$new_equipment_lifetime_distribution( flux_obsol )
-            # print( paste( "flux after lifetime:", sum( flux_obsol$no_equipment ) ) )
-            # time6 =Sys.time()
-            # print( paste( "all lifetime function:", time6 - time5 ) )
-
-          }
-          else
-          {
-            flux_obsol <- NULL
-          }
-          
-          # print( paste( "Flux_construction_EOF_positive:", sum( flux_obsol$no_equipment ) ) )
-          
-          # rajouter le flux d'equipement qui remplacent les equipements anciens en fin de vie dans le stock neuf et renove
-          bs_construction <- rbind(bs_construction, flux_obsol)
-
-      ################################## Renovation reaching lifetime ###################################################
-          
-          flux_obsol_total = bs_renovation %>% # deduire le flux d'equipement en fin de vie
-            filter( lifetime == 0 ) %>%
-            group_by( construction_year ) %>%
-            summarise( no_equipment_total = sum( no_equipment , na.rm = T ) ) 
-          
-          
-          bs_obsol <- bs_renovation %>% # equipement qui sortent ; ceux qui ont plus de lifetime
-            filter( lifetime == 0 )
-          
-          # print( paste( "Flux_renovation_EOF_negative:", sum( bs_obsol$no_equipment ) ) )
-          # 
-          # print( paste( "bs_renovation before negative flux:", sum( bs_renovation$no_equipment ) ) )
-          # 
-          bs_renovation <- bs_renovation %>% # enlever ces equipements qui sortent du stock renovation
-            filter( lifetime != 0 )
-          
-          # print( paste( "bs_renovation after negative flux:", sum( bs_renovation$no_equipment ) ) )
-          # 
-          # appliquer alpha ; inertie lors du changement d'un equipement
-          
-          if( nrow(bs_obsol) > 0 ) #On applique alpha uniqement quand bs_obsol n'est pas vide
-          {
-            
-            # browser()
-            
-            flux_obsol_alpha <- bs_obsol %>%
-              left_join( self$EQUIPMENT_ALPHA, by = "Equipment" ) %>%
-              mutate( no_equipment = alpha * no_equipment ) %>%
-              mutate( installation_year = year ) %>%
-              select(- c( lifetime, alpha ) )
-            
-            # print( paste( "bs_renovation after positive alpha flux:", sum( flux_obsol_alpha$no_equipment ) ) )
-
-            flux_obsol_total = flux_obsol_alpha %>%
-              group_by( construction_year ) %>%
-              summarise( no_equipment = sum ( no_equipment ) ) %>%
-              left_join( flux_obsol_total, by = "construction_year" ) %>%
-              mutate( no_equipment_total = no_equipment_total - no_equipment ) %>%
-              select( -no_equipment )
-
-            flux_obsol_minus_alpha <- market_share_construction_tmp %>%
-              merge( flux_obsol_total %>% select( construction_year ) ) %>%
-              left_join( flux_obsol_total, by = "construction_year" ) %>%
-              mutate( no_equipment = market_share * no_equipment_total ) %>%
-              mutate( building_class = "renovation",
-                      installation_year = year ) %>%
-              select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
-
-            # print( paste( "bs_renovation after positive minus alpha flux:", sum( flux_obsol_minus_alpha$no_equipment  , na.rm = T) ) )
-            
-            flux_obsol <- flux_obsol_alpha %>%
-              rbind( flux_obsol_minus_alpha ) %>%
-              group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year) %>%
-              summarise( no_equipment = sum(no_equipment, na.rm = TRUE) ) %>%
-              select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
-            
-            
-            flux_obsol <- self$new_equipment_lifetime_distribution( flux_obsol )
-          }
-          else
-          {
-            flux_obsol <- NULL
-          }
-
-          # print( paste( "Flux_renovation_EOF_positive before lifetime:", sum( flux_obsol$no_equipment ) ) )
-          
-          #Appliquer function lifetime apres installation
-          
-          
-          # print( paste( "Flux_renovation_EOF_positive after lifetime:", sum( flux_obsol$no_equipment ) ) )
-          
-          # rajouter le flux d'equipement qui remplacent les equipements anciens en fin de vie dans le stock neuf et renove
-          bs_renovation <- rbind(bs_renovation, flux_obsol)
-          }
-
-          ######################## Dataframe avec tous les Flux dans un stock
+          # Lifetime assignation for new equipment replacing obsolet ones
+          flux_obsol <- self$new_equipment_lifetime_distribution( flux_obsol )
+        }
+        else
+        {
+          flux_obsol <- NULL
+        }
         
-          ############ Old ##########
-          bstock_old_tmp = bs_old %>%
-            group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year ) %>%
-            summarise( no_equipment = sum( no_equipment, na.rm = TRUE ) ) %>%
-            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
-          
-          bstock_old = bstock_old %>%
-            mutate( Scenario = scenario ) %>%
-            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year ) %>%
-            rbind( bstock_old_tmp )
-          
-          ############ Construction ##########
-          bstock_construction_tmp <- bs_construction %>%
-            group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year ) %>%
-            summarise( no_equipment = sum( no_equipment, na.rm = TRUE ) ) %>%
-            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
-          
-          bstock_construction = rbind( bstock_construction, bstock_construction_tmp )
-          
-          ############ Renovation ##########
-          bstock_renovation_tmp <- bs_renovation %>%
-            group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year ) %>%
-            summarise( no_equipment = sum( no_equipment, na.rm = TRUE ) ) %>%
-            select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
-          
-          bstock_renovation = rbind( bstock_renovation, bstock_renovation_tmp )
-          
-          bstock_total <- rbind(
-            bstock_old,
-            bstock_construction,
-            bstock_renovation
-          )
-          
-          # time7 =Sys.time()
-          # print( time7 - time1 )
+        # Addition of this flux in the stock of renovation building dataframe
+        bs_renovation <- rbind( bs_renovation, flux_obsol )
+        
+
+        ################################ 8. Cumulative stock calculation for each building class ################################################
+        # Old
+        bstock_old_tmp = bs_old %>%
+          group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year ) %>%
+          summarise( no_equipment = sum( no_equipment, na.rm = TRUE ) ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year )
+        
+        bstock_old = bstock_old %>%
+          mutate( Scenario = scenario ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year ) %>%
+          rbind( bstock_old_tmp )
+        
+        # Contruction
+        bstock_construction_tmp <- bs_construction %>%
+          group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year ) %>%
+          summarise( no_equipment = sum( no_equipment, na.rm = TRUE ) ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
+        
+        bstock_construction = rbind( bstock_construction, bstock_construction_tmp )
+        
+        ## Renovation
+        bstock_renovation_tmp <- bs_renovation %>%
+          group_by( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, Year ) %>%
+          summarise( no_equipment = sum( no_equipment, na.rm = TRUE ) ) %>%
+          select( Scenario, Sector, building_class, construction_year, Equipment, Energy, installation_year, no_equipment, Year)
+        
+        bstock_renovation = rbind( bstock_renovation, bstock_renovation_tmp )
+        
+        # Total
+        bstock_total <- rbind(
+          bstock_old,
+          bstock_construction,
+          bstock_renovation
+        )
+
       }
       STOCK_EQUIPMENT = rbind( STOCK_EQUIPMENT, bstock_total )
     }
@@ -1519,7 +1182,7 @@ options( dplyr.summarise.inform = FALSE )
     
     prepare_data = p_prepare_data,
     project_stock_RES = p_project_stock_RES,
-    project_equipment_RES = p_project_equipment_RES_v2,
+    project_equipment_RES = p_project_equipment_RES,
     project_efficiency_main_RES = p_project_efficiency_main_RES,
     project_efficiency_backup_RES = p_project_efficiency_backup_RES,
     project_consumption_main_RES = p_project_consumption_main_RES,
@@ -1528,7 +1191,7 @@ options( dplyr.summarise.inform = FALSE )
     project_KPI = p_project_KPI,
     export_to_AMADEUS = p_export_to_AMADEUS,
     old_equipment_lifetime_distribution = p_old_equipment_lifetime_distribution,
-    new_equipment_lifetime_distribution = p_new_equipment_lifetime_distribution_V2
+    new_equipment_lifetime_distribution = p_new_equipment_lifetime_distribution
   )
   
   
