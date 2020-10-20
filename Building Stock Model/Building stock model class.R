@@ -167,17 +167,20 @@ options( dplyr.summarise.inform = FALSE )
   p_old_equipment_lifetime_distribution <- function()
   {
     last_historical_year = self$ls_inputs_data$building_stock %>%
-      filter( Year == self$projection_year - 1 )
+      filter( Year == self$projection_year - 1 ) %>%
+      filter( !( stringr::str_detect( Equipment, "cooling" ) ) )
     
-    # browser()
     all_equipment = NULL
     for( equipment in 1:nrow(last_historical_year) ) 
     {
       value_equipment = round( last_historical_year[ equipment, ]$Value, 0 )
-      
+
+      equipment_name = last_historical_year[ equipment, ]$Equipment
+      lifetime_old_equipment = ( self$EQUIPMENT_OLD_MAPPING %>% filter( Equipment == equipment_name ) )$Lifetime
+
       set.seed(0)
-      quantile_vector = seq( 1, 20, 1 )
-      distribution_equipment = dunif( x = quantile_vector, min = 0, max = 20 )
+      quantile_vector = seq( 1, lifetime_old_equipment, 1 )
+      distribution_equipment = dunif( x = quantile_vector, min = 0, max = lifetime_old_equipment )
       
       tmp_equipment = tibble( Sector = rep( last_historical_year[ equipment, ]$Sector, length(distribution_equipment) ), 
                               building_class = rep( "old", length(distribution_equipment) ),
@@ -1006,7 +1009,6 @@ options( dplyr.summarise.inform = FALSE )
       mutate( thermal_energy_per_sqm = thermal_consumption / total_floor_area * 10^9 ) %>%
       select( -c( total_floor_area, thermal_consumption ))
 
-    browser()
     insulation_primary_per_bc_tmp = consumption_backup_df %>% 
       group_by( Scenario, Sector, Energy, building_class, Year ) %>%
       summarise( final_consumption = sum( consumption_final_backup ) )
@@ -1146,7 +1148,11 @@ options( dplyr.summarise.inform = FALSE )
     country_mapping = NULL, 
     EQUIPMENT_MAPPING = tibble( Equipment = c("coal boiler", "oil boiler", "gas boiler", "biomass boiler", "district heating", "hp air/air", "hp air/water", "hp hybrid", "direct heater"),
                                 Energy = c("coal", "oil", "gas", "biomass and waste", "final heat", "electricity", "electricity", "electricity", "electricity" ),
-                                Lifetime = c( 20, 20, 20, 20, 20, 17, 17, 17, 15 ) ),
+                                Lifetime = c( 20, 20, 20, 20, 20, 17, 17, 17, 20 ) ),
+
+    EQUIPMENT_OLD_MAPPING = tibble( Equipment = c("coal boiler", "oil boiler", "gas boiler", "biomass boiler", "district heating", "hp air/air", "hp air/water", "hp hybrid", "direct heater"),
+                                Energy = c("coal", "oil", "gas", "biomass and waste", "final heat", "electricity", "electricity", "electricity", "electricity" ),
+                                Lifetime = c( 10, 10, 20, 20, 20, 20, 20, 20, 20 ) ),
     
     BACKUP_MAPPING = tibble( Equipment = c("coal boiler", "oil boiler", "gas boiler", "biomass boiler", "district heating", "hp air/air", "hp air/water", "hp hybrid", "direct heater"),
                              Backup = c(NA_real_, NA_real_, NA_real_, NA_real_, NA_real_, "direct heater", "direct heater", "gas boiler", NA_real_ ),
@@ -1225,7 +1231,7 @@ options( dplyr.summarise.inform = FALSE )
   country_mapping = readr::read_delim( "./Building Stock Model/Data/Inputs/CountryRegionMapping.csv" , delim = ",")
   # country_list = c("AT","BE","BG","CY","CZ","DE","DK","EE","EL","ES","FI","FR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","UK","CH","NO")
   # country_list = c("AT","BE","CH","DE","ES","FR","IT","NL","PT") #???,"BE","BG","CY","CZ","DE","DK","EE","EL","ES","FI","FR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","UK","CH","NO")
-  country_list = c( "IT" )
+  country_list = c( "DE" )
   ls_BDSM = list()
 
   for( country_name in country_list )
